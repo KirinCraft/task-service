@@ -1,0 +1,30 @@
+# Go
+/bin/
+/build/
+/dist/
+/out/
+*.test
+*.out
+coverage.out
+cover.out
+
+# Editors
+.vscode/
+.idea/
+
+# Logs & tmp
+*.log
+*.tmp
+*.bak
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# System
+.DS_Store
+Thumbs.db
