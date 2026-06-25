@@ -25,4 +25,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	if err := database.RunMigrations(db); err != nil {
+		log.Fatal(err)
+	}
 }
