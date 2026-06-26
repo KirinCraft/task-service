@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	application "task-service/internal/app"
 	"task-service/internal/config"
 	database "task-service/internal/db"
-	httpserver "task-service/internal/http-server"
 
 	"github.com/joho/godotenv"
 )
@@ -32,11 +32,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := httpserver.NewRouter()
+	app := application.New(cfg, db)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.AppPort,
-		Handler: r,
+		Handler: app.Router,
 	}
 
 	if err := server.ListenAndServe(); err != nil {

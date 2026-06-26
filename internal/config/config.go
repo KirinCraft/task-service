@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 )
 
 type Config struct {
@@ -14,11 +15,15 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+
+	JWTSecret string
+	JWTTTL    time.Duration
 }
 
 const (
 	DefaultEnv     = "example"
 	DefaultAppPort = "8080"
+	DefaultJWTTTL  = 24 * time.Hour
 )
 
 func GetEnv() string {
@@ -39,6 +44,21 @@ func MustLoad() *Config {
 		DBUser:     os.Getenv("DB_USER"),
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
+		JWTSecret:  os.Getenv("JWT_SECRET"),
+	}
+
+	jwtTTL := os.Getenv("JWT_TTL")
+
+	if jwtTTL == "" {
+		cfg.JWTTTL = DefaultJWTTTL
+	} else {
+		duration, err := time.ParseDuration(jwtTTL)
+
+		if err != nil {
+			panic("JWT_TTL is invalid")
+		}
+
+		cfg.JWTTTL = duration
 	}
 
 	if cfg.AppPort == "" {
@@ -61,12 +81,17 @@ func (c *Config) validate() {
 		{"DB_PORT", c.DBPort},
 		{"DB_USER", c.DBUser},
 		{"DB_NAME", c.DBName},
+		{"JWT_SECRET", c.JWTSecret},
 	}
 
 	for _, field := range r {
 		if field.value == "" {
 			panic(fmt.Sprintf("%s is empty", field.name))
 		}
+	}
+
+	if len(c.JWTSecret) < 32 {
+		panic("JWT_SECRET must be at least 32 characters")
 	}
 }
 
