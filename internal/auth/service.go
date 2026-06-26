@@ -26,13 +26,13 @@ func (e ValidationError) Error() string {
 }
 
 type Service struct {
-	usersRep   *users.Repository
+	usersRepo   *users.Repository
 	jwtManager *JWTManager
 }
 
 func NewService(usersRep *users.Repository, jwtManager *JWTManager) *Service {
 	return &Service{
-		usersRep:   usersRep,
+		usersRepo:   usersRep,
 		jwtManager: jwtManager,
 	}
 }
@@ -70,7 +70,7 @@ func (s *Service) Register(ctx context.Context, r RegisterRequest) (*RegisterRes
 		PasswordHash: string(passwordHash),
 	}
 
-	id, err := s.usersRep.Create(ctx, user)
+	id, err := s.usersRepo.Create(ctx, user)
 
 	if err != nil {
 
@@ -103,7 +103,7 @@ func (s *Service) Login(ctx context.Context, r LoginRequest) (*LoginResponse, er
 		}
 	}
 
-	user, err := s.usersRep.FindByEmail(ctx, email)
+	user, err := s.usersRepo.FindByEmail(ctx, email)
 
 	if err != nil {
 		if errors.Is(err, users.ErrUserNotFound) {

@@ -7,6 +7,7 @@ import (
 	"task-service/internal/config"
 	httpserver "task-service/internal/http-server"
 	"task-service/internal/middleware"
+	"task-service/internal/tasks"
 	"task-service/internal/teams"
 	"task-service/internal/users"
 )
@@ -24,6 +25,7 @@ func New(cfg *config.Config, db *sql.DB) *App {
 
 	auth.RegisterRoutes(router, buildAuth(db, jwtManager))
 	teams.RegisterRoutes(router, buildTeams(db), authMiddleware)
+	tasks.RegisterRoutes(router, buildTasks(db), authMiddleware)
 
 	return &App{
 		Router: router,
@@ -46,4 +48,13 @@ func buildTeams(db *sql.DB) *teams.Handler {
 	teamsService := teams.NewService(teamsRepo, usersRepo)
 
 	return teams.NewHandler(teamsService)
+}
+
+func buildTasks(db *sql.DB) *tasks.Handler {
+	tasksRepo := tasks.NewRepository(db)
+	teamsRepo := teams.NewRepository(db)
+
+	tasksService := tasks.NewService(tasksRepo, teamsRepo)
+
+	return tasks.NewHandler(tasksService)
 }
