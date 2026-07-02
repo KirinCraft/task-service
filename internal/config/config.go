@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -18,6 +19,10 @@ type Config struct {
 
 	JWTSecret string
 	JWTTTL    time.Duration
+
+	RedisAddr     string
+	RedisPassword string
+	RedisDB       int
 }
 
 const (
@@ -37,14 +42,17 @@ func GetEnv() string {
 
 func MustLoad() *Config {
 	cfg := &Config{
-		Env:        GetEnv(),
-		AppPort:    os.Getenv("APP_PORT"),
-		DBHost:     os.Getenv("DB_HOST"),
-		DBPort:     os.Getenv("DB_PORT"),
-		DBUser:     os.Getenv("DB_USER"),
-		DBPassword: os.Getenv("DB_PASSWORD"),
-		DBName:     os.Getenv("DB_NAME"),
-		JWTSecret:  os.Getenv("JWT_SECRET"),
+		Env:           GetEnv(),
+		AppPort:       os.Getenv("APP_PORT"),
+		DBHost:        os.Getenv("DB_HOST"),
+		DBPort:        os.Getenv("DB_PORT"),
+		DBUser:        os.Getenv("DB_USER"),
+		DBPassword:    os.Getenv("DB_PASSWORD"),
+		DBName:        os.Getenv("DB_NAME"),
+		JWTSecret:     os.Getenv("JWT_SECRET"),
+		RedisAddr:     os.Getenv("REDIS_ADDR"),
+		RedisPassword: os.Getenv("REDIS_PASSWORD"),
+		RedisDB:       getEnvAsInt("REDIS_DB", 0),
 	}
 
 	jwtTTL := os.Getenv("JWT_TTL")
@@ -104,4 +112,20 @@ func (c *Config) MySQLDSN() string {
 		c.DBPort,
 		c.DBName,
 	)
+}
+
+func getEnvAsInt(key string, fallback int) int {
+	value := os.Getenv(key)
+
+	if value == "" {
+		return fallback
+	}
+
+	result, err := strconv.Atoi(value)
+
+	if err != nil {
+		return fallback
+	}
+
+	return result
 }

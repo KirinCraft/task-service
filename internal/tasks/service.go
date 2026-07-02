@@ -2,15 +2,21 @@ package tasks
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	"task-service/internal/teams"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const (
+	teamTasksCacheTTL = 5 * time.Minute
+
 	limitDefault  = 20
 	limitMax      = 100
 	offsetDefault = 0
@@ -27,12 +33,14 @@ var (
 type Service struct {
 	tasksRepo *Repository
 	teamsRepo *teams.Repository
+	redis     *redis.Client
 }
 
-func NewService(tasksRepo *Repository, teamsRepo *teams.Repository) *Service {
+func NewService(tasksRepo *Repository, teamsRepo *teams.Repository, redisClient *redis.Client) *Service {
 	return &Service{
 		tasksRepo: tasksRepo,
 		teamsRepo: teamsRepo,
+		redis:     redisClient,
 	}
 }
 
@@ -71,6 +79,8 @@ func (s *Service) Create(ctx context.Context, req CreateTaskRequest, userID int6
 	if err != nil {
 		return nil, fmt.Errorf("create task: %w", err)
 	}
+
+	s.invalidateTeamTasksCache(ctx, req.TeamID)
 
 	return &TaskResponse{
 		ID:          taskID,
@@ -127,7 +137,7 @@ func (s *Service) List(ctx context.Context, req ListTasksRequest, userID int64) 
 		filter.Status = &status
 	}
 
-	items, err := s.tasksRepo.List(ctx, filter)
+	items, err := s.listTasksCached(ctx, filter)
 
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
@@ -213,6 +223,8 @@ func (s *Service) Update(ctx context.Context, taskID int64, req UpdateTaskReques
 		return nil, fmt.Errorf("update task: %w", err)
 	}
 
+	s.invalidateTeamTasksCache(ctx, updatedTask.TeamID)
+
 	return &TaskResponse{
 		ID:          updatedTask.ID,
 		TeamID:      updatedTask.TeamID,
@@ -287,4 +299,72 @@ func taskToResponse(task Task) TaskResponse {
 		AssigneeID:  task.AssigneeID,
 		CreatedBy:   task.CreatedBy,
 	}
+}
+
+func (s *Service) invalidateTeamTasksCache(ctx context.Context, teamID int64) {
+	if s.redis == nil || teamID <= 0 {
+		return
+	}
+
+	if err := s.redis.Del(ctx, teamTasksCacheKey(teamID)).Err(); err != nil {
+		log.Printf("redis del error: %v", err)
+	}
+}
+
+func (s *Service) listTasksCached(ctx context.Context, filter TaskFilter) ([]Task, error) {
+	if !isCacheableTaskList(filter) {
+		return s.tasksRepo.List(ctx, filter)
+	}
+
+	cacheKey := teamTasksCacheKey(filter.TeamID)
+
+	if s.redis != nil {
+		cached, err := s.redis.Get(ctx, cacheKey).Result()
+
+		switch {
+		case err == nil:
+			var items []Task
+			if err := json.Unmarshal([]byte(cached), &items); err == nil {
+				return items, nil
+			}
+			log.Printf("redis unmarshal error: %v", err)
+		case errors.Is(err, redis.Nil):
+			//cache miss
+		default:
+			log.Printf("redis get error: %v", err)
+		}
+	}
+
+	items, err := s.tasksRepo.List(ctx, filter)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if s.redis != nil {
+		data, err := json.Marshal(items)
+
+		if err != nil {
+			log.Printf("redis marshal error: %v", err)
+			return items, nil
+		}
+
+		if err := s.redis.Set(ctx, cacheKey, data, teamTasksCacheTTL).Err(); err != nil {
+			log.Printf("redis set error: %v", err)
+		}
+	}
+
+	return items, nil
+}
+
+func isCacheableTaskList(filter TaskFilter) bool {
+	return filter.TeamID > 0 &&
+		filter.AssigneeID == nil &&
+		filter.Status == nil &&
+		filter.Limit == limitDefault &&
+		filter.Offset == offsetDefault
+}
+
+func teamTasksCacheKey(teamID int64) string {
+	return fmt.Sprintf("tasks:team:%d", teamID)
 }

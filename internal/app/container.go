@@ -11,6 +11,8 @@ import (
 	"task-service/internal/tasks"
 	"task-service/internal/teams"
 	"task-service/internal/users"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type App struct {
@@ -18,7 +20,7 @@ type App struct {
 	DB     *sql.DB
 }
 
-func New(cfg *config.Config, db *sql.DB) *App {
+func New(cfg *config.Config, db *sql.DB, redisClient *redis.Client) *App {
 	router := httpserver.NewRouter()
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTTTL)
@@ -26,7 +28,7 @@ func New(cfg *config.Config, db *sql.DB) *App {
 
 	auth.RegisterRoutes(router, buildAuth(db, jwtManager))
 	teams.RegisterRoutes(router, buildTeams(db), authMiddleware)
-	tasks.RegisterRoutes(router, buildTasks(db), authMiddleware)
+	tasks.RegisterRoutes(router, buildTasks(db, redisClient), authMiddleware)
 
 	reports.RegisterRoutes(router, buildReports(db), authMiddleware)
 
@@ -53,11 +55,11 @@ func buildTeams(db *sql.DB) *teams.Handler {
 	return teams.NewHandler(teamsService)
 }
 
-func buildTasks(db *sql.DB) *tasks.Handler {
+func buildTasks(db *sql.DB, redisClient *redis.Client) *tasks.Handler {
 	tasksRepo := tasks.NewRepository(db)
 	teamsRepo := teams.NewRepository(db)
 
-	tasksService := tasks.NewService(tasksRepo, teamsRepo)
+	tasksService := tasks.NewService(tasksRepo, teamsRepo, redisClient)
 
 	return tasks.NewHandler(tasksService)
 }

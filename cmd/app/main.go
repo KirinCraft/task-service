@@ -9,6 +9,7 @@ import (
 	database "task-service/internal/db"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -22,6 +23,17 @@ func main() {
 	cfg := config.MustLoad()
 	ctx := context.Background()
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	defer redisClient.Close()
+
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Printf("redis unavailable: %v", err)
+	}
+
 	db, err := database.NewMySQL(ctx, cfg.MySQLDSN())
 	if err != nil {
 		log.Fatal(err)
@@ -32,7 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app := application.New(cfg, db)
+	app := application.New(cfg, db, redisClient)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.AppPort,
